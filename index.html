@@ -107,6 +107,10 @@ const W = cv.width, H = cv.height;
 const GROUND = H - 48;           // верх набережной
 ctx.imageSmoothingEnabled = false;
 
+// ---- спрайты ----
+const catImg = new Image(); catImg.src = 'cat.png';   // 126x120, смотрит влево
+const zefImg = new Image(); zefImg.src = 'zefir.png';
+
 // ---- палитра ----
 const C = {
   cat:'#3a3340', catLight:'#5a5266', belly:'#f7efe2',
@@ -152,40 +156,24 @@ const cat = {
   }
 };
 
-// рисуем пиксельного кота. ox,oy = низ-лево опоры
-function drawCat(g, ox, oy, s, run, sad=false){
-  const p = (x,y,w,h,col)=>{ g.fillStyle=col; g.fillRect(Math.round(ox+x*s), Math.round(oy+y*s), Math.ceil(w*s), Math.ceil(h*s)); };
-  // тело (опора снизу): кот высотой ~30, шириной ~34
-  // ноги-«бег»
-  const leg = sad?0 : (run? (Math.floor(frame/6)%2?2:-2) : 0);
-  p(6,-6,6,6,C.cat);                 // задняя лапа
-  p(20,-6,6,6,C.cat);
-  p(6,-6+0,6,4,C.cat);
-  if(!sad){ p(4,-6,6,6,C.cat); p(22+leg,-6,6,6,C.cat); }
-  // туловище
-  p(4,-26,28,20,C.cat);
-  p(8,-22,20,12,C.catLight);         // блик
-  // живот
-  p(10,-12,16,7,C.belly);
-  // голова
-  p(22,-34,16,14,C.cat);
-  p(25,-30,9,7,C.catLight);
-  // уши
-  p(23,-38,5,5,C.cat);
-  p(33,-38,5,5,C.cat);
-  // глаза + нос
-  if(sad){
-    p(27,-30,2,2,'#fff'); p(33,-30,2,2,'#fff');
-    p(27,-28,2,1,C.zefir); p(33,-28,2,1,C.zefir); // слезинки
-  } else {
-    p(28,-31,2,3,'#fff'); p(34,-31,2,3,'#fff');
-    p(29,-30,1,2,'#1a1422'); p(35,-30,1,2,'#1a1422');
+// рисуем кота-спрайт. cx = центр по X, feetY = низ (лапы)
+function drawCat(g, cx, feetY, s, run, sad=false){
+  if(!catImg.complete || !catImg.naturalWidth) return;
+  const h = 44 * s;
+  const w = h * (catImg.naturalWidth / catImg.naturalHeight);
+  const bob  = (run && !sad) ? -Math.abs(Math.sin(frame/7)) * 4 * s : 0; // подскок бега
+  const tilt = (run && !sad) ?  Math.sin(frame/7) * 0.05 : 0;            // лёгкий наклон
+  g.save();
+  g.imageSmoothingEnabled = false;
+  g.translate(cx, feetY + bob);
+  g.rotate(tilt);
+  g.scale(-1, 1);                    // зеркало: спрайт смотрит влево -> бежим вправо
+  g.drawImage(catImg, -w/2, -h, w, h);
+  g.restore();
+  if(sad){                          // слеза поверх
+    g.fillStyle = '#7fb0e0';
+    g.fillRect(Math.round(cx + 2*s), Math.round(feetY - h*0.6), Math.ceil(2*s), Math.ceil(6*s));
   }
-  p(31,-27,3,2,C.zefir);             // нос
-  // хвост
-  const tw = sad?0 : (Math.sin(frame/9)*2);
-  p(0,-22+tw,5,4,C.cat);
-  p(-2,-26+tw,4,6,C.cat);
 }
 
 // ---- препятствия: поребрик / мост ----
@@ -230,9 +218,13 @@ function spawnItem(){
 function drawItem(it){
   if(it.type==='zefir'){
     const bob = Math.sin(frame/10+it.x)*2;
-    ctx.fillStyle=C.zefir;  ctx.beginPath(); ctx.arc(it.x,it.y+bob,it.r,0,7); ctx.fill();
-    ctx.fillStyle=C.zefir2; ctx.fillRect(it.x-it.r,it.y-2+bob,it.r*2,4);
-    ctx.fillStyle='#fff7'; ctx.fillRect(it.x-5,it.y-6+bob,4,4);
+    const d = it.r*2.6;
+    if(zefImg.complete && zefImg.naturalWidth){
+      ctx.imageSmoothingEnabled=false;
+      ctx.drawImage(zefImg, it.x-d/2, it.y-d/2+bob, d, d*(zefImg.naturalHeight/zefImg.naturalWidth));
+    } else {
+      ctx.fillStyle=C.zefir; ctx.beginPath(); ctx.arc(it.x,it.y+bob,it.r,0,7); ctx.fill();
+    }
   } else {
     const bob = Math.sin(frame/10+it.x)*2;
     const y=it.y+bob;
@@ -340,7 +332,7 @@ function loop(){
   // кот хитбокс
   const cw=cat.bw*0.6, ch=cat.bh*0.85;
   const cx=cat.x-cw*0.3, cy=cat.y-ch;
-  drawCat(ctx, cat.x-18*cat.scale, cat.y, cat.scale, true);
+  drawCat(ctx, cat.x, cat.y, cat.scale, true);
 
   // сбор предметов
   items.forEach(it=>{
@@ -367,7 +359,7 @@ function drawSadScene(){
   books.forEach(b=>{ sg.fillStyle=b[0]; sg.fillRect(b[1],b[2],b[3],b[4]);
     sg.fillStyle='#f7efe2'; sg.fillRect(b[1]+b[3]-5,b[2]+2,4,b[4]-4); });
   // кот сверху, грустный
-  drawCat(sg, 40, 72, 1.4, false, true);
+  drawCat(sg, 60, 72, 1.6, false, true);
 }
 
 function gameOver(){
