@@ -61,7 +61,7 @@
   }
   .over.show{display:flex;animation:pop .25s ease-out}
   @keyframes pop{from{opacity:0;transform:scale(.96)}to{opacity:1;transform:scale(1)}}
-  .over h2{font-size:clamp(14px,4vw,22px);color:var(--accent);text-shadow:2px 2px 0 #00000055}
+  .over h2{font-size:clamp(14px,4vw,22px);color:#F07C29;text-shadow:2px 2px 0 #00000055}
   .over .final{font-size:clamp(8px,2.6vw,11px);line-height:2;color:var(--paper)}
   .over canvas{width:120px;height:120px}
   .btns{display:flex;gap:12px;flex-wrap:wrap;justify-content:center}
@@ -75,8 +75,8 @@
   button:hover{transform:translateY(-2px);box-shadow:0 7px 0 var(--ink)}
   button:active{transform:translateY(3px);box-shadow:0 2px 0 var(--ink)}
   button:focus-visible{outline:3px solid #fff;outline-offset:3px}
-  .b-again{background:var(--gold)}
-  .b-prize{background:var(--accent);color:#fff;text-shadow:1px 1px 0 #00000055}
+  .b-again{background:#F07C29;color:#fff;text-shadow:1px 1px 0 #00000055}
+  .b-prize{background:#C60B46;color:#fff;text-shadow:1px 1px 0 #00000055}
 </style>
 </head>
 <body>
@@ -108,8 +108,13 @@ const GROUND = H - 48;           // верх набережной
 ctx.imageSmoothingEnabled = false;
 
 // ---- спрайты ----
-const catImg = new Image(); catImg.src = 'cat.png';   // 126x120, смотрит влево
+const catImg = new Image(); catImg.src = 'cat.png';   // 126x120, смотрит влево (прыжок/стойка)
+const runImgs = ['cat-run1.webp','cat-run2.webp'].map(s=>{ const i=new Image(); i.src=s; return i; }); // кадры бега
+const sadImg = new Image(); sadImg.src = 'cat-end.png'; // грустный Кузя, финал
 const zefImg = new Image(); zefImg.src = 'zefir.png';
+const bookImgs = ['book1.png','book2.png'].map(s=>{ const i=new Image(); i.src=s; return i; });
+let bookIdx = 0;
+const cityImg = new Image(); cityImg.src = 'city.webp'; // панорама Питера
 
 // ---- палитра ----
 const C = {
@@ -158,21 +163,18 @@ const cat = {
 
 // рисуем кота-спрайт. cx = центр по X, feetY = низ (лапы)
 function drawCat(g, cx, feetY, s, run, sad=false){
-  if(!catImg.complete || !catImg.naturalWidth) return;
+  let img;
+  if(sad) img = sadImg;
+  else if(run && cat.y >= GROUND-0.5) img = runImgs[(frame/6|0) % runImgs.length]; // бег по земле
+  else img = catImg;                                                                // прыжок / стойка
+  if(!img.complete || !img.naturalWidth) return;
   const h = 44 * s;
-  const w = h * (catImg.naturalWidth / catImg.naturalHeight);
-  const bob  = (run && !sad) ? -Math.abs(Math.sin(frame/7)) * 4 * s : 0; // подскок бега
-  const tilt = (run && !sad) ?  Math.sin(frame/7) * 0.05 : 0;            // лёгкий наклон
+  const w = h * (img.naturalWidth / img.naturalHeight);
   g.save();
   g.imageSmoothingEnabled = false;
-  g.translate(cx, feetY + bob);
-  g.rotate(tilt);
-  g.drawImage(catImg, -w/2, -h, w, h);
+  g.translate(cx, feetY);
+  g.drawImage(img, -w/2, -h, w, h);
   g.restore();
-  if(sad){                          // слеза поверх
-    g.fillStyle = '#7fb0e0';
-    g.fillRect(Math.round(cx + 2*s), Math.round(feetY - h*0.6), Math.ceil(2*s), Math.ceil(6*s));
-  }
 }
 
 // ---- препятствия: поребрик / мост ----
@@ -211,65 +213,45 @@ function spawnItem(){
   if(Math.random()<0.5){
     items.push({type:'zefir', x:W+20, y, r:11, val:10});
   } else {
-    items.push({type:'book', x:W+20, y, w:22, h:16, val:15, col:C.book[Math.random()*4|0]});
+    items.push({type:'book', x:W+20, y, w:18, h:28, val:15, img:bookImgs[bookIdx++ % bookImgs.length]});
   }
 }
 function drawItem(it){
   if(it.type==='zefir'){
-    const bob = Math.sin(frame/10+it.x)*2;
     const d = it.r*2.6;
     if(zefImg.complete && zefImg.naturalWidth){
       ctx.imageSmoothingEnabled=false;
-      ctx.drawImage(zefImg, it.x-d/2, it.y-d/2+bob, d, d*(zefImg.naturalHeight/zefImg.naturalWidth));
+      ctx.drawImage(zefImg, it.x-d/2, it.y-d/2, d, d*(zefImg.naturalHeight/zefImg.naturalWidth));
     } else {
-      ctx.fillStyle=C.zefir; ctx.beginPath(); ctx.arc(it.x,it.y+bob,it.r,0,7); ctx.fill();
+      ctx.fillStyle=C.zefir; ctx.beginPath(); ctx.arc(it.x,it.y,it.r,0,7); ctx.fill();
     }
   } else {
-    const bob = Math.sin(frame/10+it.x)*2;
-    const y=it.y+bob;
-    ctx.fillStyle=it.col; ctx.fillRect(it.x-it.w/2,y-it.h/2,it.w,it.h);
-    ctx.fillStyle='#f7efe2'; ctx.fillRect(it.x-it.w/2+it.w-5,y-it.h/2+2,4,it.h-4); // страницы
-    ctx.fillStyle='#ffffff55'; ctx.fillRect(it.x-it.w/2+2,y-it.h/2+2,it.w-9,3);
+    const im=it.img;
+    if(im && im.complete && im.naturalWidth){
+      ctx.imageSmoothingEnabled=false;
+      const h=it.h, w=h*(im.naturalWidth/im.naturalHeight);
+      ctx.drawImage(im, it.x-w/2, it.y-h/2, w, h);
+    } else {
+      ctx.fillStyle='#4d7fe0'; ctx.fillRect(it.x-it.w/2,it.y-it.h/2,it.w,it.h);
+    }
   }
 }
 
-// ---- фон: пиксельный Петербург ----
+// ---- фон: панорама Петербурга (спрайт) ----
 function drawCity(){
-  // небо уже из градиента body, но зальём верх лёгким
-  // дальние крыши
-  const off = (dist*0.4)%160;
-  ctx.fillStyle='#b9a9cf';
-  for(let i=-1;i<8;i++){
-    const x=i*160-off;
-    ctx.fillRect(x+10,120,40,80);
-    ctx.fillRect(x+60,140,30,60);
-    ctx.fillRect(x+100,110,46,90);
-  }
-  // купол + шпиль Петропавловки (средний слой)
-  const off2=(dist*0.7)%460;
-  for(let i=-1;i<4;i++){
-    const x=i*460-off2+60;
-    // здание-крепость
-    ctx.fillStyle='#cdbf9c'; ctx.fillRect(x,150,120,60);
-    ctx.fillStyle='#b8a886'; ctx.fillRect(x,150,120,6);
-    // башня
-    ctx.fillStyle='#e0d4b2'; ctx.fillRect(x+50,96,22,58);
-    // золотой шпиль
-    ctx.fillStyle=C.spire;
-    ctx.beginPath(); ctx.moveTo(x+50,96); ctx.lineTo(x+61,40); ctx.lineTo(x+72,96); ctx.fill();
-    ctx.fillStyle='#fff'; ctx.fillRect(x+60,40,2,-8);
-  }
-  // купол (Исаакий-стайл) ещё один акцент
-  const off3=(dist*0.7)%620;
-  for(let i=-1;i<3;i++){
-    const x=i*620-off3+300;
-    ctx.fillStyle='#d8cdb0'; ctx.fillRect(x,150,90,60);
-    ctx.fillStyle=C.dome; ctx.beginPath(); ctx.arc(x+45,150,30,Math.PI,0); ctx.fill();
-    ctx.fillStyle=C.spire; ctx.fillRect(x+43,108,4,12);
+  if(cityImg.complete && cityImg.naturalWidth){
+    const h = 200;                                   // полоса от верха до воды
+    const w = h * (cityImg.naturalWidth / cityImg.naturalHeight);
+    const worldX = dist * 0.5;                        // параллакс
+    ctx.imageSmoothingEnabled = false;
+    let sx = -(worldX % w);
+    for(; sx < W; sx += w){ ctx.drawImage(cityImg, sx, 0, w, h); } // простое зацикливание
+  } else {
+    ctx.fillStyle='#bcd9e8'; ctx.fillRect(0,0,W,200);
   }
   // Нева
   ctx.fillStyle=C.neva; ctx.fillRect(0,200,W,GROUND-200);
-  ctx.fillStyle='#6f93c5';
+  ctx.fillStyle=C.nevaLine;
   for(let i=0;i<W;i+=40){ ctx.fillRect((i-(dist*1.2)%40),206+((i/40|0)%2?4:0),20,3); }
 }
 function drawClouds(){
@@ -323,7 +305,7 @@ function loop(){
 
   // отрисовка
   ctx.clearRect(0,0,W,H);
-  drawCity(); drawClouds();
+  drawCity();
   drawGround();
   obstacles.forEach(drawObstacle);
   items.forEach(drawItem);
