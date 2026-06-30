@@ -1,0 +1,398 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>404 — Приключение Кузи</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --ink:#2b2440;
+    --paper:#f7efe2;
+    --accent:#ff5d8f;   /* зефир */
+    --gold:#ffcf5c;     /* шпиль */
+    --neva:#5a7fb5;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
+  body{
+    font-family:'Press Start 2P',monospace;
+    background:
+      radial-gradient(120% 80% at 50% 0%, #ffd9a8 0%, #f3a6b6 32%, #8e7fb8 64%, #3a3360 100%);
+    color:var(--paper);
+    display:flex;flex-direction:column;align-items:center;justify-content:center;
+    min-height:100%;
+    padding:24px 16px;
+    image-rendering:pixelated;
+    overflow:hidden;
+  }
+  /* grain */
+  body::after{
+    content:"";position:fixed;inset:0;pointer-events:none;opacity:.06;
+    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='80' height='80'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+    mix-blend-mode:overlay;
+  }
+  .head{text-align:center;margin-bottom:14px;text-shadow:2px 2px 0 #00000033}
+  .head .code{
+    font-size:clamp(34px,9vw,64px);letter-spacing:2px;color:var(--gold);
+    text-shadow:3px 3px 0 #b5612a, 6px 6px 0 #00000022;
+  }
+  .head .msg{font-size:clamp(8px,2.4vw,12px);line-height:1.8;margin-top:12px;color:var(--paper)}
+  .stage{
+    position:relative;width:min(900px,100%);
+    border:4px solid var(--ink);
+    border-radius:8px;
+    box-shadow:0 14px 0 #1a1530, 0 22px 40px -12px #1a153099;
+    overflow:hidden;
+    background:#bfe0ef;
+  }
+  canvas{display:block;width:100%;height:auto;touch-action:none;cursor:pointer}
+  .hint{
+    margin-top:14px;font-size:clamp(7px,2vw,9px);color:#fff8;letter-spacing:1px;text-align:center;line-height:1.9;
+  }
+
+  /* overlay: game over */
+  .over{
+    position:absolute;inset:0;display:none;flex-direction:column;align-items:center;justify-content:center;
+    gap:18px;padding:20px;text-align:center;
+    background:linear-gradient(180deg,#2b244099,#2b2440f0);
+    backdrop-filter:blur(2px);
+  }
+  .over.show{display:flex;animation:pop .25s ease-out}
+  @keyframes pop{from{opacity:0;transform:scale(.96)}to{opacity:1;transform:scale(1)}}
+  .over h2{font-size:clamp(14px,4vw,22px);color:var(--accent);text-shadow:2px 2px 0 #00000055}
+  .over .final{font-size:clamp(8px,2.6vw,11px);line-height:2;color:var(--paper)}
+  .over canvas{width:120px;height:120px}
+  .btns{display:flex;gap:12px;flex-wrap:wrap;justify-content:center}
+  button{
+    font-family:inherit;font-size:clamp(8px,2.4vw,11px);
+    padding:14px 18px;border:3px solid var(--ink);border-radius:6px;
+    cursor:pointer;color:var(--ink);
+    transition:transform .08s cubic-bezier(.2,1.4,.5,1), box-shadow .08s;
+    box-shadow:0 5px 0 var(--ink);
+  }
+  button:hover{transform:translateY(-2px);box-shadow:0 7px 0 var(--ink)}
+  button:active{transform:translateY(3px);box-shadow:0 2px 0 var(--ink)}
+  button:focus-visible{outline:3px solid #fff;outline-offset:3px}
+  .b-again{background:var(--gold)}
+  .b-prize{background:var(--accent);color:#fff;text-shadow:1px 1px 0 #00000055}
+</style>
+</head>
+<body>
+  <div class="head">
+    <div class="code">404</div>
+    <div class="msg">По вашему запросу ничего не&nbsp;найдено.<br>Зато Кузя нашёл, чем заняться&nbsp;— помоги ему!</div>
+  </div>
+
+  <div class="stage">
+    <canvas id="game" width="900" height="320"></canvas>
+    <div class="over" id="over">
+      <canvas id="sadcat" width="120" height="120"></canvas>
+      <h2>Кузя устал...</h2>
+      <div class="final" id="final"></div>
+      <div class="btns">
+        <button class="b-again" id="again">Играть заново</button>
+        <button class="b-prize" id="prize">Получить приз</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="hint">ПРОБЕЛ / ↑ / клик — прыжок &nbsp;•&nbsp; лови зефир и книги, расти и беги дальше</div>
+
+<script>
+const cv = document.getElementById('game');
+const ctx = cv.getContext('2d');
+const W = cv.width, H = cv.height;
+const GROUND = H - 48;           // верх набережной
+ctx.imageSmoothingEnabled = false;
+
+// ---- палитра ----
+const C = {
+  cat:'#3a3340', catLight:'#5a5266', belly:'#f7efe2',
+  zefir:'#ff8fb3', zefir2:'#ffd0df',
+  book:['#e2574c','#4caf7d','#4d7fe0','#f0b429'],
+  curb:'#9aa3ad', curbDark:'#6f7882',
+  bridge:'#7a6a55', bridgeDark:'#564a3a',
+  granite:'#8b8f99', graniteDark:'#6c707a',
+  spire:'#ffcf5c', dome:'#6fc3c0',
+  neva:'#5a7fb5', nevaLine:'#6f93c5',
+};
+
+// ---- состояние ----
+let state, score, dist, speed, frame, obstacles, items, clouds, best=0, raf;
+
+function reset(){
+  state='play'; score=0; dist=0; speed=4.2; frame=0;
+  obstacles=[]; items=[];
+  clouds=[{x:120,y:50,s:2},{x:480,y:34,s:3},{x:760,y:62,s:2}];
+  cat.reset();
+  spawnT=60; itemT=90;
+  document.getElementById('over').classList.remove('show');
+}
+
+// ---- кот Кузя ----
+const cat = {
+  x:90, y:GROUND, vy:0, w:34, h:30, scaleStep:0, // 0 мал,1 сред,2 больш
+  reset(){ this.y=GROUND; this.vy=0; this.scaleStep=0; this.jumps=0; },
+  get scale(){ return [1,1.35,1.75][this.scaleStep]; },
+  get bw(){ return this.w*this.scale; },
+  get bh(){ return this.h*this.scale; },
+  jump(){
+    // двойной прыжок запрещён, только с земли
+    if(this.y>=GROUND-0.5){ this.vy=-12.4; }
+  },
+  update(){
+    this.vy += 0.62;                 // гравитация
+    this.y  += this.vy;
+    if(this.y>GROUND){ this.y=GROUND; this.vy=0; }
+    // рост по очкам
+    const step = score>=240?2 : score>=90?1 : 0;
+    this.scaleStep = step;
+  }
+};
+
+// рисуем пиксельного кота. ox,oy = низ-лево опоры
+function drawCat(g, ox, oy, s, run, sad=false){
+  const p = (x,y,w,h,col)=>{ g.fillStyle=col; g.fillRect(Math.round(ox+x*s), Math.round(oy+y*s), Math.ceil(w*s), Math.ceil(h*s)); };
+  // тело (опора снизу): кот высотой ~30, шириной ~34
+  // ноги-«бег»
+  const leg = sad?0 : (run? (Math.floor(frame/6)%2?2:-2) : 0);
+  p(6,-6,6,6,C.cat);                 // задняя лапа
+  p(20,-6,6,6,C.cat);
+  p(6,-6+0,6,4,C.cat);
+  if(!sad){ p(4,-6,6,6,C.cat); p(22+leg,-6,6,6,C.cat); }
+  // туловище
+  p(4,-26,28,20,C.cat);
+  p(8,-22,20,12,C.catLight);         // блик
+  // живот
+  p(10,-12,16,7,C.belly);
+  // голова
+  p(22,-34,16,14,C.cat);
+  p(25,-30,9,7,C.catLight);
+  // уши
+  p(23,-38,5,5,C.cat);
+  p(33,-38,5,5,C.cat);
+  // глаза + нос
+  if(sad){
+    p(27,-30,2,2,'#fff'); p(33,-30,2,2,'#fff');
+    p(27,-28,2,1,C.zefir); p(33,-28,2,1,C.zefir); // слезинки
+  } else {
+    p(28,-31,2,3,'#fff'); p(34,-31,2,3,'#fff');
+    p(29,-30,1,2,'#1a1422'); p(35,-30,1,2,'#1a1422');
+  }
+  p(31,-27,3,2,C.zefir);             // нос
+  // хвост
+  const tw = sad?0 : (Math.sin(frame/9)*2);
+  p(0,-22+tw,5,4,C.cat);
+  p(-2,-26+tw,4,6,C.cat);
+}
+
+// ---- препятствия: поребрик / мост ----
+let spawnT, itemT;
+function spawnObstacle(){
+  const kind = Math.random()<0.6?'curb':'bridge';
+  if(kind==='curb'){
+    obstacles.push({type:'curb', x:W+20, w:22+Math.random()*16|0, h:24});
+  } else {
+    obstacles.push({type:'bridge', x:W+20, w:64, h:44});
+  }
+}
+function drawObstacle(o){
+  const baseY = GROUND;
+  if(o.type==='curb'){
+    ctx.fillStyle=C.curbDark; ctx.fillRect(o.x,baseY-o.h,o.w,o.h);
+    ctx.fillStyle=C.curb;     ctx.fillRect(o.x,baseY-o.h,o.w,6);
+    ctx.fillStyle=C.curb;     ctx.fillRect(o.x+3,baseY-o.h+8,o.w-6,4);
+  } else { // мост — арка
+    ctx.fillStyle=C.bridgeDark; ctx.fillRect(o.x,baseY-o.h,o.w,o.h);
+    ctx.fillStyle=C.bridge;     ctx.fillRect(o.x,baseY-o.h,o.w,8);
+    // арочный проём
+    ctx.fillStyle='#bfe0ef';
+    ctx.beginPath();
+    ctx.arc(o.x+o.w/2, baseY, o.w/2-8, Math.PI, 0); ctx.fill();
+    ctx.fillRect(o.x+8,baseY-12,o.w-16,12);
+    // перила
+    ctx.fillStyle=C.gold; ctx.fillRect(o.x,baseY-o.h-4,o.w,4);
+  }
+}
+
+// ---- предметы: зефир / книга ----
+function spawnItem(){
+  const high = Math.random()<0.5;
+  const y = high ? GROUND-90-(Math.random()*30|0) : GROUND-44;
+  if(Math.random()<0.5){
+    items.push({type:'zefir', x:W+20, y, r:11, val:10});
+  } else {
+    items.push({type:'book', x:W+20, y, w:22, h:16, val:15, col:C.book[Math.random()*4|0]});
+  }
+}
+function drawItem(it){
+  if(it.type==='zefir'){
+    const bob = Math.sin(frame/10+it.x)*2;
+    ctx.fillStyle=C.zefir;  ctx.beginPath(); ctx.arc(it.x,it.y+bob,it.r,0,7); ctx.fill();
+    ctx.fillStyle=C.zefir2; ctx.fillRect(it.x-it.r,it.y-2+bob,it.r*2,4);
+    ctx.fillStyle='#fff7'; ctx.fillRect(it.x-5,it.y-6+bob,4,4);
+  } else {
+    const bob = Math.sin(frame/10+it.x)*2;
+    const y=it.y+bob;
+    ctx.fillStyle=it.col; ctx.fillRect(it.x-it.w/2,y-it.h/2,it.w,it.h);
+    ctx.fillStyle='#f7efe2'; ctx.fillRect(it.x-it.w/2+it.w-5,y-it.h/2+2,4,it.h-4); // страницы
+    ctx.fillStyle='#ffffff55'; ctx.fillRect(it.x-it.w/2+2,y-it.h/2+2,it.w-9,3);
+  }
+}
+
+// ---- фон: пиксельный Петербург ----
+function drawCity(){
+  // небо уже из градиента body, но зальём верх лёгким
+  // дальние крыши
+  const off = (dist*0.4)%160;
+  ctx.fillStyle='#b9a9cf';
+  for(let i=-1;i<8;i++){
+    const x=i*160-off;
+    ctx.fillRect(x+10,120,40,80);
+    ctx.fillRect(x+60,140,30,60);
+    ctx.fillRect(x+100,110,46,90);
+  }
+  // купол + шпиль Петропавловки (средний слой)
+  const off2=(dist*0.7)%460;
+  for(let i=-1;i<4;i++){
+    const x=i*460-off2+60;
+    // здание-крепость
+    ctx.fillStyle='#cdbf9c'; ctx.fillRect(x,150,120,60);
+    ctx.fillStyle='#b8a886'; ctx.fillRect(x,150,120,6);
+    // башня
+    ctx.fillStyle='#e0d4b2'; ctx.fillRect(x+50,96,22,58);
+    // золотой шпиль
+    ctx.fillStyle=C.spire;
+    ctx.beginPath(); ctx.moveTo(x+50,96); ctx.lineTo(x+61,40); ctx.lineTo(x+72,96); ctx.fill();
+    ctx.fillStyle='#fff'; ctx.fillRect(x+60,40,2,-8);
+  }
+  // купол (Исаакий-стайл) ещё один акцент
+  const off3=(dist*0.7)%620;
+  for(let i=-1;i<3;i++){
+    const x=i*620-off3+300;
+    ctx.fillStyle='#d8cdb0'; ctx.fillRect(x,150,90,60);
+    ctx.fillStyle=C.dome; ctx.beginPath(); ctx.arc(x+45,150,30,Math.PI,0); ctx.fill();
+    ctx.fillStyle=C.spire; ctx.fillRect(x+43,108,4,12);
+  }
+  // Нева
+  ctx.fillStyle=C.neva; ctx.fillRect(0,200,W,GROUND-200);
+  ctx.fillStyle='#6f93c5';
+  for(let i=0;i<W;i+=40){ ctx.fillRect((i-(dist*1.2)%40),206+((i/40|0)%2?4:0),20,3); }
+}
+function drawClouds(){
+  ctx.fillStyle='#ffffffcc';
+  clouds.forEach(c=>{
+    c.x-=0.25*c.s; if(c.x<-60)c.x=W+40;
+    ctx.fillRect(c.x,c.y,30*c.s,8*c.s/2);
+    ctx.fillRect(c.x+10,c.y-6,18*c.s,8*c.s/2);
+  });
+}
+function drawGround(){
+  ctx.fillStyle=C.graniteDark; ctx.fillRect(0,GROUND,W,H-GROUND);
+  ctx.fillStyle=C.granite;     ctx.fillRect(0,GROUND,W,6);
+  // швы гранита
+  ctx.fillStyle=C.graniteDark;
+  for(let i=0;i<W+40;i+=40){ ctx.fillRect((i-(dist*1)%40),GROUND,2,H-GROUND); }
+}
+
+// ---- HUD ----
+function drawHUD(){
+  ctx.fillStyle='#2b2440'; ctx.font='12px "Press Start 2P", monospace';
+  ctx.textBaseline='top';
+  ctx.fillText('ОЧКИ '+String(score).padStart(4,'0'), 16, 14);
+  const dm = (dist/10|0);
+  const t='МЕТРЫ '+String(dm).padStart(4,'0');
+  ctx.fillText(t, W-16-ctx.measureText(t).width, 14);
+}
+
+// ---- столкновения ----
+function hit(ax,ay,aw,ah, bx,by,bw,bh){
+  return ax<bx+bw && ax+aw>bx && ay<by+bh && ay+ah>by;
+}
+
+// ---- цикл ----
+function loop(){
+  raf=requestAnimationFrame(loop);
+  if(state!=='play') return;
+  frame++; dist+=speed; speed=4.2+dist*0.00035;
+
+  // спавн
+  if(--spawnT<=0){ spawnObstacle(); spawnT=70+Math.random()*60|0; }
+  if(--itemT<=0){ spawnItem();     itemT=80+Math.random()*70|0; }
+
+  cat.update();
+
+  // движение объектов
+  obstacles.forEach(o=>o.x-=speed);
+  items.forEach(it=>it.x-=speed);
+  obstacles=obstacles.filter(o=>o.x+o.w> -10);
+  items=items.filter(it=>it.x> -30 && !it.got);
+
+  // отрисовка
+  ctx.clearRect(0,0,W,H);
+  drawCity(); drawClouds();
+  drawGround();
+  obstacles.forEach(drawObstacle);
+  items.forEach(drawItem);
+
+  // кот хитбокс
+  const cw=cat.bw*0.6, ch=cat.bh*0.85;
+  const cx=cat.x-cw*0.3, cy=cat.y-ch;
+  drawCat(ctx, cat.x-18*cat.scale, cat.y, cat.scale, true);
+
+  // сбор предметов
+  items.forEach(it=>{
+    const iw = it.type==='zefir'?it.r*2:it.w, ih=it.type==='zefir'?it.r*2:it.h;
+    const ix = it.x-iw/2, iy=it.y-ih/2;
+    if(!it.got && hit(cx,cy,cw,ch, ix,iy,iw,ih)){ it.got=true; score+=it.val; }
+  });
+  // удар о препятствие
+  for(const o of obstacles){
+    if(hit(cx,cy,cw,ch, o.x+4,GROUND-o.h, o.w-8,o.h)){ gameOver(); break; }
+  }
+  // очки за дистанцию
+  if(frame%6===0) score++;
+
+  drawHUD();
+}
+
+// ---- грустный Кузя на книгах (overlay canvas) ----
+function drawSadScene(){
+  const sc=document.getElementById('sadcat'), sg=sc.getContext('2d');
+  sg.imageSmoothingEnabled=false; sg.clearRect(0,0,120,120);
+  // стопка книг
+  const books=[['#4d7fe0',16,96,88,12],['#e2574c',22,84,76,12],['#4caf7d',18,72,84,12]];
+  books.forEach(b=>{ sg.fillStyle=b[0]; sg.fillRect(b[1],b[2],b[3],b[4]);
+    sg.fillStyle='#f7efe2'; sg.fillRect(b[1]+b[3]-5,b[2]+2,4,b[4]-4); });
+  // кот сверху, грустный
+  drawCat(sg, 40, 72, 1.4, false, true);
+}
+
+function gameOver(){
+  state='over'; best=Math.max(best,score);
+  drawSadScene();
+  document.getElementById('final').innerHTML =
+    'ОЧКИ: '+score+'<br>МЕТРЫ: '+(dist/10|0)+'<br>РЕКОРД: '+best;
+  document.getElementById('over').classList.add('show');
+}
+
+// ---- ввод ----
+function press(e){
+  if(state==='over') return;
+  if(e.type==='keydown' && !([32,38].includes(e.keyCode))) return;
+  e.preventDefault?.(); cat.jump();
+}
+addEventListener('keydown',press);
+cv.addEventListener('pointerdown',press);
+
+document.getElementById('again').onclick=()=>{ reset(); };
+document.getElementById('prize').onclick=()=>{
+  alert('🎁 Промокод КУЗЯ-404: лови приз! (вставь свою механику)');
+};
+
+reset(); loop();
+</script>
+</body>
+</html>
