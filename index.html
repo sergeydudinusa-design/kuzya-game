@@ -167,7 +167,6 @@ function drawCat(g, cx, feetY, s, run, sad=false){
   g.imageSmoothingEnabled = false;
   g.translate(cx, feetY + bob);
   g.rotate(tilt);
-  g.scale(-1, 1);                    // зеркало: спрайт смотрит влево -> бежим вправо
   g.drawImage(catImg, -w/2, -h, w, h);
   g.restore();
   if(sad){                          // слеза поверх
