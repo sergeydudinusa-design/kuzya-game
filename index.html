@@ -115,6 +115,7 @@ const zefImg = new Image(); zefImg.src = 'zefir.png';
 const bookImgs = ['book1.png','book2.png'].map(s=>{ const i=new Image(); i.src=s; return i; });
 let bookIdx = 0;
 const cityImg = new Image(); cityImg.src = 'city.webp'; // панорама Питера
+const booksImg = new Image(); booksImg.src = 'books.png'; // стопка книг (финал)
 
 // ---- палитра ----
 const C = {
@@ -163,16 +164,20 @@ const cat = {
 
 // рисуем кота-спрайт. cx = центр по X, feetY = низ (лапы)
 function drawCat(g, cx, feetY, s, run, sad=false){
-  let img;
+  let img, bob=0;
+  const onGround = run && cat.y >= GROUND-0.5;
   if(sad) img = sadImg;
-  else if(run && cat.y >= GROUND-0.5) img = runImgs[(frame/6|0) % runImgs.length]; // бег по земле
-  else img = catImg;                                                                // прыжок / стойка
+  else if(onGround){
+    img = runImgs[(dist/14|0) % runImgs.length];  // кадры по расстоянию -> в такт с фоном
+    bob = -Math.abs(Math.sin(dist/14)) * 3 * s;   // лёгкий подскок в такт лапам
+  }
+  else img = catImg;                              // прыжок / стойка
   if(!img.complete || !img.naturalWidth) return;
   const h = 44 * s;
   const w = h * (img.naturalWidth / img.naturalHeight);
   g.save();
   g.imageSmoothingEnabled = false;
-  g.translate(cx, feetY);
+  g.translate(cx, feetY + bob);
   g.drawImage(img, -w/2, -h, w, h);
   g.restore();
 }
@@ -335,12 +340,12 @@ function loop(){
 function drawSadScene(){
   const sc=document.getElementById('sadcat'), sg=sc.getContext('2d');
   sg.imageSmoothingEnabled=false; sg.clearRect(0,0,120,120);
-  // стопка книг
-  const books=[['#4d7fe0',16,96,88,12],['#e2574c',22,84,76,12],['#4caf7d',18,72,84,12]];
-  books.forEach(b=>{ sg.fillStyle=b[0]; sg.fillRect(b[1],b[2],b[3],b[4]);
-    sg.fillStyle='#f7efe2'; sg.fillRect(b[1]+b[3]-5,b[2]+2,4,b[4]-4); });
+  // стопка книг (спрайт)
+  const bw=104, bh=bw*(booksImg.naturalHeight/booksImg.naturalWidth || 0.31);
+  const bx=(120-bw)/2, by=112-bh;
+  if(booksImg.complete && booksImg.naturalWidth) sg.drawImage(booksImg, bx, by, bw, bh);
   // кот сверху, грустный
-  drawCat(sg, 60, 72, 1.6, false, true);
+  drawCat(sg, 60, by+2, 1.6, false, true);
 }
 
 function gameOver(){
